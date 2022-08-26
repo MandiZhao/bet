@@ -15,6 +15,7 @@ from omegaconf import OmegaConf
 import utils
 import wandb
 
+from vil.datasets import MinimalH5Dataset
 
 class Workspace:
     def __init__(self, cfg):
@@ -23,13 +24,18 @@ class Workspace:
         self.cfg = cfg
         self.device = torch.device(cfg.device)
         utils.set_seed_everywhere(cfg.seed)
-        self.dataset = hydra.utils.call(
-            cfg.env.dataset_fn,
-            train_fraction=cfg.train_fraction,
-            random_seed=cfg.seed,
-            device=self.device,
-        )
-        self.train_set, self.test_set = self.dataset
+        # self.dataset = hydra.utils.call(
+        #     cfg.env.dataset_fn,
+        #     train_fraction=cfg.train_fraction,
+        #     random_seed=cfg.seed,
+        #     device=self.device,
+        # )
+        # self.train_set, self.test_set = self.dataset
+        
+        self.train_set = MinimalH5Dataset(mode='train', **cfg.min_h5_dataset)
+        self.test_set = MinimalH5Dataset(mode='eval', **cfg.min_h5_dataset)
+
+ 
         self._setup_loaders()
 
         # Create the model
@@ -47,16 +53,17 @@ class Workspace:
         self.save_training_latents = False
         self._training_latents = []
 
-        self.wandb_run = wandb.init(
-            dir=str(self.work_dir),
-            project=cfg.project,
-            config=OmegaConf.to_container(cfg, resolve=True),
-        )
-        wandb.config.update(
-            {
-                "save_path": self.work_dir,
-            }
-        )
+        if cfg.log_wandb:
+            self.wandb_run = wandb.init(
+                dir=str(self.work_dir),
+                project=cfg.project,
+                config=OmegaConf.to_container(cfg, resolve=True),
+            )
+            wandb.config.update(
+                {
+                    "save_path": self.work_dir,
+                }
+            )
 
     def _init_action_ae(self):
         if self.action_ae is None:  # possibly already initialized from snapshot
@@ -120,7 +127,10 @@ class Workspace:
                 self.train_loader, desc=f"Training prior epoch {self.prior_epoch}"
             )
             for data in pbar:
-                observations, action, mask = data
+                # observations, action, mask = data
+                observations = data['images']
+                action = data['actions']
+                mask = None 
                 self.state_prior_optimizer.zero_grad(set_to_none=True)
                 obs, act = observations.to(self.device), action.to(self.device)
                 enc_obs = self.obs_encoding_net(obs)
@@ -141,7 +151,10 @@ class Workspace:
         with utils.eval_mode(
             self.obs_encoding_net, self.action_ae, self.state_prior, no_grad=True
         ):
-            for observations, action, mask in self.test_loader:
+            #for observations, action, mask in self.test_loader:
+            for data in self.test_loader:
+                observations = data['images']
+                action = data['actions']
                 obs, act = observations.to(self.device), action.to(self.device)
                 enc_obs = self.obs_encoding_net(obs)
                 latent = self.action_ae.encode_into_latent(act, enc_obs)
@@ -197,7 +210,8 @@ class Workspace:
         tags = tuple(
             map(tag_func, [self.obs_encoding_net, self.action_ae, self.state_prior])
         )
-        self.wandb_run.tags += tags
+        if self.cfg.log_wandb:
+            self.wandb_run.tags += tags
 
     @property
     def snapshot(self):
@@ -274,7 +288,10 @@ class Workspace:
             for key in iterator_log_component.keys()
         )
         iterator.set_postfix_str(postfix)
-        wandb.log(log_components, step=epoch)
+        if self.cfg.log_wandb:
+            wandb.log(log_components, step=epoch)
+        else:
+            print(log_components)        
         self.log_components = OrderedDict()
 
 

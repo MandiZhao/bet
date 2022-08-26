@@ -15,7 +15,7 @@ num_workers: 32
 window_size: 10
 
 # Training details
-num_training_epochs: 1
+num_training_epochs: 10
 data_parallel: False
 device: cuda
 optim: Adam
@@ -35,12 +35,32 @@ eval_prior_every: 1
 save_prior_every: 1
 
 # Logging frequency
-eval_every: 1
+eval_every: -1
 save_every: 1
 
 # Wandb config
-project: behavior_transformer_repro_test
+project: vil # behavior_transformer_repro_test
 experiment: kitchen_train
+
+log_wandb: False
+min_h5_dataset:
+  dirname:  "/checkpoint/mandizhao/train_seeds/"
+  template: "*/*/*/*.h5"
+  verbose: False
+  context_keys: [obj_goal] #[new_left, new_right] # ['r3m:new_top'] # old schema: ['rgb:left_cam:240x424:flat']
+  input_keys: [observations] #[new_left, new_right] # ['r3m:new_left', 'r3m:new_right'] # old: ['rgb:left_cam:240x424:flat']
+  proprio_keys: ['robot_jnt', 'robot_vel']
+  context_window: 10
+  np_seed: 1
+  img_size: [224,224]
+  split_ratio: 0.99
+  num_load_trials: -1
+  use_compressed: False
+  crop: False
+  random_crop: False
+  jitter: False
+  cutoff: 0
+
 
 hydra:
   job:

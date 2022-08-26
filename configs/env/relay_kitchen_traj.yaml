@@ -1,7 +1,7 @@
-name: kitchen-all-v0
+name: kitchen_ldoor_close-v3   ##kitchen-all-v0
 args: []
 kwargs: {}
-obs_dim: 60
+obs_dim: 72 # 60
 action_dim: 9
 action_min: null
 action_max: null
